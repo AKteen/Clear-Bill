@@ -6,10 +6,11 @@ A production-ready document processing application that combines AI analysis wit
 
 ### Core Functionality
 - **AI Document Analysis** - Powered by Groq's Llama models for text and vision processing
+- **Invoice-Only Processing** - Automatically filters and rejects non-invoice documents
 - **Automated Audit System** - Configurable policy engine with compliance scoring
 - **Duplicate Detection** - SHA-256 hashing prevents reprocessing of identical documents
 - **Multi-Format Support** - Handles PDFs, images (PNG, JPG, GIF, BMP, TIFF)
-- **Cloud Storage** - Automatic file backup to Cloudinary
+- **Cloud Storage** - Automatic file backup to Cloudinary (compliant documents only)
 
 ### Audit & Compliance
 - **Policy Engine** - Customizable rules for invoice validation
@@ -170,16 +171,21 @@ The system includes pre-configured audit policies:
 ### Processing Flow
 1. File upload with validation
 2. Duplicate detection via SHA-256 hashing
-3. Parallel processing: Cloudinary upload + Groq AI analysis
-4. Audit policy validation with compliance scoring
-5. Database storage with full audit trail
+3. Groq AI analysis to determine document type
+4. Invoice format validation (rejects non-invoices)
+5. Cloudinary upload (only for valid invoices)
+6. Audit policy validation with compliance scoring
+7. Database storage (only for compliant documents)
 
 ### Security Features
 - File type validation
 - Size limits (10MB default)
+- Invoice format validation (rejects non-invoices)
+- Restricted item detection (alcohol, entertainment, luxury)
 - SQL injection prevention
 - Environment variable configuration
 - Secure hash generation with salt
+- Database storage only for compliant documents
 
 ## 🚀 Deployment
 
