@@ -1,0 +1,1 @@
+build:\n  command: pip install -r requirements.txt\nstart:\n  command: python main.py
