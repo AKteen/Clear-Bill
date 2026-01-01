@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
 from database import get_db, engine
-from models import Base, Document, AuditPolicy
+from models import Base, Document, AuditPolicy, AuditRule
 from schemas import DocumentResponse, UploadResponse, ErrorResponse, AuditPolicyResponse
 from utils import (
     generate_file_hash,
@@ -14,7 +14,7 @@ from utils import (
     upload_to_cloudinary,
     process_with_groq
 )
-from audit_service import create_default_audit_policies, perform_audit
+from audit_service import create_default_audit_policies, create_default_audit_rules, perform_audit
 from config import settings
 from migrate import migrate_database
 
@@ -24,9 +24,10 @@ Base.metadata.create_all(bind=engine)
 # Run migration
 migrate_database()
 
-# Initialize default audit policies
+# Initialize default audit policies and rules
 with next(get_db()) as db:
     create_default_audit_policies(db)
+    create_default_audit_rules(db)
 
 app = FastAPI(title="Document Processing API", version="1.0.0")
 
@@ -82,14 +83,6 @@ async def upload_document(
         # Process in parallel: upload to cloudinary and process with groq
         loop = asyncio.get_event_loop()
         
-        upload_task = loop.run_in_executor(
-            executor,
-            upload_to_cloudinary,
-            file_content,
-            file.filename,
-            file_type
-        )
-        
         groq_task = loop.run_in_executor(
             executor,
             process_with_groq,
@@ -98,25 +91,42 @@ async def upload_document(
             file.filename
         )
         
-        # Wait for both tasks to complete
-        cloudinary_url, groq_response = await asyncio.gather(upload_task, groq_task)
+        # Get Groq response first to check if it's an invoice
+        groq_response, json_data = await groq_task
         
-        # Perform audit if it's an invoice/image
-        audit_result = None
-        if file_type == "image":
-            audit_result = perform_audit(groq_response, db)
-            
-            # Strict validation: reject if not compliant
-            if audit_result and not audit_result.is_compliant:
-                # Count critical violations (not warnings)
-                critical_violations = [v for v in audit_result.violations if v.get('severity') in ['medium', 'high']]
-                if len(critical_violations) > 0:
-                    raise HTTPException(
-                        status_code=400, 
-                        detail=f"Document rejected: {len(critical_violations)} policy violations found. Document must be compliant to upload."
-                    )
+        # Check if document is an invoice
+        content = groq_response.lower()
+        invoice_keywords = ['invoice', 'bill', 'receipt', 'total', 'amount', 'price', 'cost', 'payment']
+        has_invoice_format = any(keyword in content for keyword in invoice_keywords)
         
-        # Save to database with retry logic
+        if not has_invoice_format:
+            raise HTTPException(
+                status_code=400, 
+                detail="Document rejected: Only invoice/bill documents are accepted for processing."
+            )
+        
+        # Only upload to Cloudinary if it's an invoice
+        upload_task = loop.run_in_executor(
+            executor,
+            upload_to_cloudinary,
+            file_content,
+            file.filename,
+            file_type
+        )
+        
+        cloudinary_url = await upload_task
+        
+        # Perform audit check
+        audit_result = perform_audit(groq_response, json_data, db)
+        
+        # Reject if restricted items found
+        if audit_result and audit_result.approval_status == "rejected":
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Document rejected: Restricted items found. Document cannot be approved."
+            )
+        
+        # Only save to database if all validations pass
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -137,7 +147,6 @@ async def upload_document(
                 db.rollback()
                 if attempt == max_retries - 1:
                     raise db_error
-                # Wait before retry
                 await asyncio.sleep(1)
         
         response_data = DocumentResponse(**new_document.__dict__)
@@ -172,6 +181,11 @@ async def get_document(document_id: int, db: Session = Depends(get_db)):
 async def get_audit_policies(db: Session = Depends(get_db)):
     policies = db.query(AuditPolicy).all()
     return [AuditPolicyResponse(**policy.__dict__) for policy in policies]
+
+@app.get("/audit-rules")
+async def get_audit_rules(db: Session = Depends(get_db)):
+    rules = db.query(AuditRule).all()
+    return [{"id": rule.id, "category": rule.category, "max_limit": rule.max_limit, "is_restricted": rule.is_restricted, "description": rule.description} for rule in rules]
 
 @app.get("/health")
 async def health_check():

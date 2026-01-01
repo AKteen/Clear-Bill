@@ -37,7 +37,20 @@ function App() {
       setDocuments(response.data);
       addMessage('📋 All documents loaded from database', 'bot');
     } catch (error) {
-      addMessage('Error fetching documents', 'bot');
+      if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+        addMessage('❌ Cannot connect to server. Please check if backend is running on port 8000.', 'bot');
+      } else {
+        addMessage('Error fetching documents', 'bot');
+      }
+    }
+  };
+
+  const testConnection = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/health`);
+      addMessage('✅ Server connection successful', 'bot');
+    } catch (error) {
+      addMessage('❌ Server connection failed. Check if backend is running on port 8000.', 'bot');
     }
   };
 
@@ -96,10 +109,11 @@ function App() {
       setDocuments(prev => [data, ...prev]);
       
     } catch (error) {
-      const errorMsg = error.response?.data?.detail || 'Upload failed';
+      const errorMsg = error.response?.data?.detail || error.message || 'Upload failed';
       
-      // Check if it's a policy violation rejection
-      if (error.response?.status === 400 && errorMsg.includes('policy violations')) {
+      if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+        addMessage('❌ Cannot connect to server. Please check if backend is running on port 8000.', 'bot');
+      } else if (error.response?.status === 400 && errorMsg.includes('policy violations')) {
         addMessage(`❌ Upload Rejected: ${errorMsg}`, 'bot');
         addMessage('Please ensure your document contains: Invoice Number, Amount, Date, and Vendor Name with valid formatting.', 'bot');
       } else if (error.response?.status === 400 && errorMsg.includes('Duplicate flagged')) {
@@ -184,18 +198,43 @@ function App() {
       is_compliant = false, 
       compliance_score = 0, 
       violations = [], 
-      summary = '' 
+      summary = '',
+      approval_status = 'unknown',
+      status_color = 'gray'
     } = auditResult;
+
+    const getStatusIcon = (status) => {
+      switch(status) {
+        case 'approved': return '✅';
+        case 'warning': return '⚠️';
+        case 'rejected': return '❌';
+        default: return '❓';
+      }
+    };
+
+    const getStatusBg = (color) => {
+      switch(color) {
+        case 'green': return 'bg-green-600';
+        case 'yellow': return 'bg-yellow-600';
+        case 'red': return 'bg-red-600';
+        default: return 'bg-gray-600';
+      }
+    };
 
     return (
       <div className="mt-4 p-4 bg-zinc-950 rounded-lg border border-zinc-800">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-zinc-300">Audit Result</span>
-          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-            is_compliant ? 'bg-green-600 text-white' : 'bg-yellow-600 text-white'
-          }`}>
-            {compliance_score}% Compliant
-          </span>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs px-3 py-1 rounded-full font-medium text-white ${
+              getStatusBg(status_color)
+            }`}>
+              {getStatusIcon(approval_status)} {approval_status?.toUpperCase()}
+            </span>
+            <span className="text-xs px-2 py-1 rounded-full font-medium bg-zinc-700 text-zinc-300">
+              {compliance_score}%
+            </span>
+          </div>
         </div>
         
         <p className="text-[15px] text-white mb-3 leading-relaxed">{summary}</p>
@@ -271,6 +310,13 @@ function App() {
             <h1 className="text-base font-medium text-orange-600">ClearBill</h1>
             <p className="text-xs text-zinc-400">AI-powered bill auditing and compliance verification</p>
           </div>
+          <button 
+            onClick={testConnection}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-full text-xs flex items-center space-x-1 transition-colors mr-2"
+          >
+            <span>🔌</span>
+            <span>Test Connection</span>
+          </button>
           <button 
             onClick={fetchAllDocuments}
             className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-full text-xs flex items-center space-x-1 transition-colors"

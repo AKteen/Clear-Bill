@@ -30,3 +30,13 @@ class AuditPolicy(Base):
     severity = Column(String(20), default='medium')  # 'low', 'medium', 'high', 'warning'
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class AuditRule(Base):
+    __tablename__ = "audit_rules"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    category = Column(String(100), nullable=False)
+    max_limit = Column(Float, nullable=False)
+    is_restricted = Column(Boolean, default=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -8,6 +8,8 @@ class AuditResult(BaseModel):
     violations: List[Dict[str, Any]]
     compliance_score: float
     summary: str
+    approval_status: Optional[str] = None
+    status_color: Optional[str] = None
 
 class DocumentResponse(BaseModel):
     id: int

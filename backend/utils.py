@@ -5,6 +5,7 @@ import cloudinary.uploader
 from groq import Groq
 from config import settings
 from typing import Tuple, Optional
+import json
 import base64
 import io
 
@@ -73,14 +74,15 @@ def upload_to_cloudinary(file_content: bytes, filename: str, file_type: str) -> 
     
     return result["secure_url"]
 
-def process_with_groq(file_content: bytes, file_type: str, filename: str) -> str:
-    """Process file with appropriate Groq model"""
+def process_with_groq(file_content: bytes, file_type: str, filename: str) -> Tuple[str, str]:
+    """Process file with appropriate Groq model - returns (user_response, json_data)"""
     
     if file_type == "image":
         # Use vision model for images
         base64_image = base64.b64encode(file_content).decode('utf-8')
         
-        response = groq_client.chat.completions.create(
+        # Get user-friendly response
+        user_response = groq_client.chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=[
                 {
@@ -101,6 +103,31 @@ def process_with_groq(file_content: bytes, file_type: str, filename: str) -> str
             ],
             max_tokens=1000
         )
+        
+        # Get JSON data for backend audit
+        json_response = groq_client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Extract items and amounts from this invoice as JSON: {\"items\": [{\"name\": \"item_name\", \"category\": \"Food/Travel/Utility/Office Supplies/Alcohol/Entertainment/Jewelry/Others\", \"amount\": 0.0}], \"total_amount\": 0.0}"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens=500
+        )
+        
+        return user_response.choices[0].message.content, json_response.choices[0].message.content
         
     else:
         # Use text model for documents
@@ -123,5 +150,17 @@ def process_with_groq(file_content: bytes, file_type: str, filename: str) -> str
             ],
             max_tokens=1000
         )
-    
-    return response.choices[0].message.content
+        
+        # Get JSON data for audit
+        json_response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Extract items and amounts from this document as JSON: {{\"items\": [{{\"name\": \"item_name\", \"category\": \"Food/Travel/Utility/Office Supplies/Alcohol/Entertainment/Jewelry/Others\", \"amount\": 0.0}}], \"total_amount\": 0.0}}\n\nDocument: {text_content[:2000]}"
+                }
+            ],
+            max_tokens=500
+        )
+        
+        return response.choices[0].message.content, json_response.choices[0].message.content
