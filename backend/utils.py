@@ -88,7 +88,7 @@ def process_with_groq(file_content: bytes, file_type: str, filename: str) -> str
                     "content": [
                         {
                             "type": "text",
-                            "text": "Analyze this image and provide a detailed description of its contents."
+                            "text": "Extract invoice data in this format:\n\nITEMS:\nItem | Qty | Rate | Amount\n[item name] | [quantity] | [unit price] | [total]\n\nTOTAL: $[amount]\n\nProvide clear tabular format for all line items."
                         },
                         {
                             "type": "image_url",

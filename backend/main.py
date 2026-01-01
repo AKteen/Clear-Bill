@@ -68,13 +68,9 @@ async def upload_document(
             existing_doc = None
         
         if existing_doc:
-            return UploadResponse(
-                success=True,
-                message="Duplicate invoice detected - this document was already processed",
-                data=DocumentResponse(
-                    **existing_doc.__dict__,
-                    is_duplicate=True
-                )
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Duplicate flagged and cant upload again|📄 {existing_doc.original_filename}|🕒 {existing_doc.created_at.strftime('%Y-%m-%d %H:%M:%S')}"
             )
         
         # Detect file type
@@ -159,6 +155,11 @@ async def upload_document(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.get("/documents", response_model=List[DocumentResponse])
+async def get_all_documents(db: Session = Depends(get_db)):
+    documents = db.query(Document).order_by(Document.created_at.desc()).all()
+    return [DocumentResponse(**doc.__dict__) for doc in documents]
 
 @app.get("/document/{document_id}", response_model=DocumentResponse)
 async def get_document(document_id: int, db: Session = Depends(get_db)):

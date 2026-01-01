@@ -31,16 +31,48 @@ function App() {
     setMessages(prev => [...prev, message]);
   };
 
-  const formatText = (text) => {
-    if (!text) return '';
+  const fetchAllDocuments = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/documents`);
+      setDocuments(response.data);
+      addMessage('📋 All documents loaded from database', 'bot');
+    } catch (error) {
+      addMessage('Error fetching documents', 'bot');
+    }
+  };
+
+  const formatInvoiceData = (text) => {
+    if (!text) return text;
     
-    return text
-      .replace(/\*\*(.*?)\*\*/g, '$1')
-      .replace(/\*(.*?)\*/g, '$1')
-      .replace(/#{1,6}\s/g, '')
-      .replace(/`(.*?)`/g, '$1')
-      .replace(/\n\s*\n/g, '\n\n')
-      .trim();
+    const lines = text.split('\n');
+    let inItemsSection = false;
+    let formattedContent = [];
+    let items = [];
+    let totalAmount = '';
+    
+    lines.forEach(line => {
+      if (line.includes('ITEMS:') || line.includes('Item |')) {
+        inItemsSection = true;
+        return;
+      }
+      
+      if (line.includes('TOTAL:')) {
+        totalAmount = line.replace('TOTAL:', '').trim();
+        inItemsSection = false;
+        return;
+      }
+      
+      if (inItemsSection && line.includes('|')) {
+        const parts = line.split('|').map(p => p.trim());
+        if (parts.length >= 4) {
+          items.push(parts);
+        }
+      } else if (!inItemsSection) {
+        formattedContent.push(line);
+      }
+    });
+    
+    return { content: formattedContent.join('\n'), items, totalAmount };
   };
 
   const uploadFile = async (file) => {
@@ -70,6 +102,24 @@ function App() {
       if (error.response?.status === 400 && errorMsg.includes('policy violations')) {
         addMessage(`❌ Upload Rejected: ${errorMsg}`, 'bot');
         addMessage('Please ensure your document contains: Invoice Number, Amount, Date, and Vendor Name with valid formatting.', 'bot');
+      } else if (error.response?.status === 400 && errorMsg.includes('Duplicate flagged')) {
+        const parts = errorMsg.split('|');
+        const header = parts[0];
+        const filename = parts[1] || '';
+        const datetime = parts[2] || '';
+        
+        addMessage(
+          <div>
+            <div className="text-red-500 font-bold text-lg mb-3">
+              ⚠️ {header}
+            </div>
+            <div className="space-y-2">
+              {filename && <p className="text-zinc-300 text-sm">{filename}</p>}
+              {datetime && <p className="text-zinc-400 text-xs">{datetime}</p>}
+            </div>
+          </div>, 
+          'bot'
+        );
       } else {
         addMessage(`Error: ${errorMsg}`, 'bot');
       }
@@ -130,7 +180,12 @@ function App() {
   const renderAuditResult = (auditResult) => {
     if (!auditResult) return null;
 
-    const { is_compliant, compliance_score, violations, summary } = auditResult;
+    const { 
+      is_compliant = false, 
+      compliance_score = 0, 
+      violations = [], 
+      summary = '' 
+    } = auditResult;
 
     return (
       <div className="mt-4 p-4 bg-zinc-950 rounded-lg border border-zinc-800">
@@ -211,9 +266,18 @@ function App() {
       {/* Main Content with left margin for fixed sidebar */}
       <div className="flex-1 flex flex-col ml-64">
         {/* Compact Navbar - Fixed */}
-        <div className="bg-zinc-950 border-b border-zinc-800 p-3 fixed top-0 right-0 left-64 z-10">
-          <h1 className="text-base font-medium text-orange-600">ClearBill</h1>
-          <p className="text-xs text-zinc-400">AI-powered bill auditing and compliance verification</p>
+        <div className="bg-zinc-950 p-3 fixed top-0 right-0 left-64 z-10 flex justify-between items-center">
+          <div>
+            <h1 className="text-base font-medium text-orange-600">ClearBill</h1>
+            <p className="text-xs text-zinc-400">AI-powered bill auditing and compliance verification</p>
+          </div>
+          <button 
+            onClick={fetchAllDocuments}
+            className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-full text-xs flex items-center space-x-1 transition-colors"
+          >
+            <span>📋</span>
+            <span>All Invoices</span>
+          </button>
         </div>
 
         {/* Chat Area with top margin for fixed navbar */}
@@ -236,7 +300,9 @@ function App() {
                     ? 'bg-zinc-950 text-white ml-auto rounded-br-md border border-zinc-800' 
                     : 'bg-black text-white mr-auto rounded-bl-md border border-zinc-800'
                 }`}>
-                  <div className="text-[15px] leading-relaxed">{message.content}</div>
+                  <div className="text-[15px] leading-relaxed">
+                    {typeof message.content === 'string' ? message.content : message.content}
+                  </div>
                   
                   {message.data && (
                     <div className="mt-3 space-y-2">
@@ -255,7 +321,61 @@ function App() {
                       <div className="bg-zinc-950 p-3 rounded-lg border border-zinc-800">
                         <div className="font-medium mb-2 text-xs">AI Analysis:</div>
                         <div className="text-[15px] text-white leading-relaxed whitespace-pre-wrap">
-                          {formatText(message.data.groq_response)}
+                          {(() => {
+                            const text = message.data.groq_response;
+                            const lines = text.split('\n');
+                            let items = [];
+                            let total = '';
+                            
+                            // Extract items and amounts from AI response
+                            lines.forEach(line => {
+                              // Look for lines with $ amounts
+                              if (line.includes('$') && line.trim().length > 5) {
+                                const match = line.match(/(.+?)\s*[:\-\|]?\s*\$([\d.,]+)/);
+                                if (match && match[1].length > 2) {
+                                  items.push({ name: match[1].trim().replace(/^[\-\*\•]\s*/, ''), amount: match[2] });
+                                }
+                              }
+                              // Look for total
+                              if (line.toLowerCase().includes('total') && line.includes('$')) {
+                                const totalMatch = line.match(/\$([\d.,]+)/);
+                                if (totalMatch) total = totalMatch[1];
+                              }
+                            });
+                            
+                            return (
+                              <div>
+                                <div className="mb-4" dangerouslySetInnerHTML={{
+                                  __html: text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                                }} />
+                                
+                                {items.length > 0 && (
+                                  <div className="mb-4">
+                                    <div className="bg-zinc-900 rounded-lg overflow-hidden">
+                                      <div className="grid grid-cols-2 gap-2 p-3 bg-zinc-800 text-xs font-medium text-zinc-300">
+                                        <div>ITEM</div>
+                                        <div>AMOUNT</div>
+                                      </div>
+                                      {items.map((item, idx) => (
+                                        <div key={idx} className="grid grid-cols-2 gap-2 p-3 border-t border-zinc-800 text-sm">
+                                          <div className="text-white">{item.name}</div>
+                                          <div className="text-white font-medium">${item.amount}</div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {total && (
+                                  <div className="bg-blue-600 px-4 py-2 rounded-md inline-block">
+                                    <div className="text-white font-bold">
+                                      TOTAL: ${total}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()} 
                         </div>
                       </div>
                       
@@ -285,7 +405,7 @@ function App() {
           </div>
 
           {/* Fixed bottom upload zone */}
-          <div className="fixed bottom-0 right-0 left-64 p-3 bg-black border-t border-zinc-800">
+          <div className="fixed bottom-0 right-0 left-64 p-3 bg-black">
             <div 
               className={`border border-dashed rounded-lg p-3 text-center transition-colors cursor-pointer ${
                 isDragOver 
