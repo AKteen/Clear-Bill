@@ -2,6 +2,10 @@
 
 A production-ready document processing application that combines AI analysis with automated audit compliance checking. Upload PDFs and images to get instant AI-powered analysis with comprehensive policy validation and duplicate detection.
 
+<img width="1949" height="1331" alt="Clearbill-img" src="https://github.com/user-attachments/assets/17161ce4-8d09-4966-8bcb-dabc05178801" />
+
+
+
 ## 🚀 Features
 
 ### Core Functionality
