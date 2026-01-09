@@ -113,7 +113,7 @@ def process_with_groq(file_content: bytes, file_type: str, filename: str) -> Tup
                     "content": [
                         {
                             "type": "text",
-                            "text": "Extract items and amounts from this invoice as JSON: {\"items\": [{\"name\": \"item_name\", \"category\": \"Food/Travel/Utility/Office Supplies/Alcohol/Entertainment/Jewelry/Others\", \"amount\": 0.0}], \"total_amount\": 0.0}"
+                            "text": "Extract items and amounts from this invoice as JSON. Categorize items accurately:\n\n{\"items\": [{\"name\": \"item_name\", \"category\": \"Food/Travel/Utility/Office Supplies/Alcohol/Entertainment/Jewelry/Others\", \"amount\": 0.0}], \"total_amount\": 0.0}\n\nIMPORTANT: If you see any alcoholic beverages (wine, beer, whiskey, vodka, etc.), categorize as 'Alcohol'. If you see entertainment items (spa, massage, casino, etc.), categorize as 'Entertainment'. If you see luxury items (jewelry, designer brands, etc.), categorize as 'Jewelry'."
                         },
                         {
                             "type": "image_url",
@@ -157,7 +157,7 @@ def process_with_groq(file_content: bytes, file_type: str, filename: str) -> Tup
             messages=[
                 {
                     "role": "user",
-                    "content": f"Extract items and amounts from this document as JSON: {{\"items\": [{{\"name\": \"item_name\", \"category\": \"Food/Travel/Utility/Office Supplies/Alcohol/Entertainment/Jewelry/Others\", \"amount\": 0.0}}], \"total_amount\": 0.0}}\n\nDocument: {text_content[:2000]}"
+                    "content": f"Extract items and amounts from this document as JSON. Categorize items accurately:\n\n{{\"items\": [{{\"name\": \"item_name\", \"category\": \"Food/Travel/Utility/Office Supplies/Alcohol/Entertainment/Jewelry/Others\", \"amount\": 0.0}}], \"total_amount\": 0.0}}\n\nIMPORTANT: If you see any alcoholic beverages (wine, beer, whiskey, vodka, etc.), categorize as 'Alcohol'. If you see entertainment items (spa, massage, casino, etc.), categorize as 'Entertainment'. If you see luxury items (jewelry, designer brands, etc.), categorize as 'Jewelry'.\n\nDocument: {text_content[:2000]}"
                 }
             ],
             max_tokens=500

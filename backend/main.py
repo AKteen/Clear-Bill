@@ -170,6 +170,18 @@ async def get_all_documents(db: Session = Depends(get_db)):
     documents = db.query(Document).order_by(Document.created_at.desc()).all()
     return [DocumentResponse(**doc.__dict__) for doc in documents]
 
+@app.put("/document/{document_id}/rename")
+async def rename_document(document_id: int, new_name: str, db: Session = Depends(get_db)):
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    document.original_filename = new_name
+    db.commit()
+    db.refresh(document)
+    
+    return {"success": True, "message": "Document renamed successfully", "new_name": new_name}
+
 @app.get("/document/{document_id}", response_model=DocumentResponse)
 async def get_document(document_id: int, db: Session = Depends(get_db)):
     document = db.query(Document).filter(Document.id == document_id).first()

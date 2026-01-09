@@ -9,6 +9,8 @@ function App() {
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [editingDoc, setEditingDoc] = useState(null);
+  const [newName, setNewName] = useState('');
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -42,6 +44,19 @@ function App() {
       } else {
         addMessage('Error fetching documents', 'bot');
       }
+    }
+  };
+
+  const renameDocument = async (docId, newName) => {
+    try {
+      await axios.put(`${API_BASE_URL}/document/${docId}/rename?new_name=${encodeURIComponent(newName)}`);
+      setDocuments(prev => prev.map(doc => 
+        doc.id === docId ? {...doc, original_filename: newName} : doc
+      ));
+      setEditingDoc(null);
+      addMessage(`Document renamed to "${newName}"`, 'bot');
+    } catch (error) {
+      addMessage('Error renaming document', 'bot');
     }
   };
 
@@ -222,31 +237,31 @@ function App() {
     };
 
     return (
-      <div className="mt-4 p-4 bg-zinc-950 rounded-lg border border-zinc-800">
+      <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-sm font-medium text-zinc-300">Audit Result</span>
+          <span className="text-sm font-medium text-gray-700">Audit Result</span>
           <div className="flex items-center gap-2">
             <span className={`text-xs px-3 py-1 rounded-full font-medium text-white ${
               getStatusBg(status_color)
             }`}>
               {getStatusIcon(approval_status)} {approval_status?.toUpperCase()}
             </span>
-            <span className="text-xs px-2 py-1 rounded-full font-medium bg-zinc-700 text-zinc-300">
+            <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-200 text-gray-700">
               {compliance_score}%
             </span>
           </div>
         </div>
         
-        <p className="text-[15px] text-white mb-3 leading-relaxed">{summary}</p>
+        <p className="text-[15px] text-gray-800 mb-3 leading-relaxed">{summary}</p>
         
         {violations && violations.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-xs font-medium text-zinc-400 mb-2">Issues Found:</h4>
+            <h4 className="text-xs font-medium text-gray-600 mb-2">Issues Found:</h4>
             {violations.map((violation, index) => (
               <div key={index} className={`p-3 rounded-lg border-l-4 ${
-                violation.severity === 'warning' ? 'bg-yellow-900/20 border-yellow-500 text-yellow-200' :
-                violation.severity === 'high' ? 'bg-red-900/20 border-red-500 text-red-200' :
-                'bg-orange-900/20 border-orange-500 text-orange-200'
+                violation.severity === 'warning' ? 'bg-amber-50 border-amber-400 text-amber-800' :
+                violation.severity === 'high' ? 'bg-red-50 border-red-400 text-red-800' :
+                'bg-orange-50 border-orange-400 text-orange-800'
               }`}>
                 <div className="font-medium text-[15px] mb-1">{violation.rule_name}</div>
                 <div className="text-sm opacity-90">{violation.message}</div>
@@ -264,16 +279,16 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-orange-600 flex">
+    <div className="min-h-screen bg-gray-50 text-gray-800 flex">
       {/* Fixed Sidebar */}
-      <div className="w-64 bg-zinc-950 border-r border-zinc-800 flex flex-col fixed h-full">
-        <div className="p-3 border-b border-zinc-800">
-          <h2 className="text-sm font-medium text-zinc-300">Document History</h2>
+      <div className="w-64 bg-white border-r border-gray-200 flex flex-col fixed h-full shadow-sm">
+        <div className="p-3 border-b border-gray-200">
+          <h2 className="text-sm font-medium text-gray-700">Document History</h2>
         </div>
         
         <div className="flex-1 overflow-y-auto">
           {documents.length === 0 ? (
-            <div className="p-4 text-center text-zinc-500 text-sm">
+            <div className="p-4 text-center text-gray-500 text-sm">
               No documents yet
             </div>
           ) : (
@@ -281,20 +296,54 @@ function App() {
               {documents.map((doc, index) => (
                 <div
                   key={doc.id || index}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-zinc-900 ${
-                    selectedDocument?.id === doc.id ? 'bg-zinc-900 border border-zinc-700' : ''
+                  className={`p-3 pb-8 rounded-lg cursor-pointer transition-colors hover:bg-gray-100 relative ${
+                    selectedDocument?.id === doc.id ? 'bg-blue-50 border border-blue-200' : ''
                   }`}
-                  onClick={() => handleDocumentClick(doc)}
                 >
-                  <div className="text-sm font-medium text-orange-600 truncate">
-                    {doc.original_filename}
+                  <div onClick={() => handleDocumentClick(doc)}>
+                    {editingDoc === doc.id ? (
+                      <input
+                        type="text"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        onBlur={() => {
+                          if (newName.trim()) renameDocument(doc.id, newName.trim());
+                          else setEditingDoc(null);
+                        }}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter' && newName.trim()) {
+                            renameDocument(doc.id, newName.trim());
+                          }
+                        }}
+                        className="text-sm font-medium text-blue-600 bg-transparent border-b border-blue-300 outline-none w-full"
+                        autoFocus
+                      />
+                    ) : (
+                      <div className="text-sm font-medium text-blue-600 truncate">
+                        {doc.original_filename}
+                      </div>
+                    )}
+                    <div className="text-xs text-gray-500 mt-1">
+                      {doc.file_type} • {new Date(doc.created_at).toLocaleDateString()}
+                    </div>
+                    {doc.is_duplicate && (
+                      <div className="text-xs text-amber-600 mt-1">⚠️ Duplicate</div>
+                    )}
                   </div>
-                  <div className="text-xs text-zinc-400 mt-1">
-                    {doc.file_type} • {new Date(doc.created_at).toLocaleDateString()}
-                  </div>
-                  {doc.is_duplicate && (
-                    <div className="text-xs text-yellow-400 mt-1">⚠️ Duplicate</div>
-                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingDoc(doc.id);
+                      setNewName(doc.original_filename);
+                    }}
+                    className="absolute bottom-1 right-1 p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                    title="Rename document"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  </button>
                 </div>
               ))}
             </div>
@@ -305,10 +354,10 @@ function App() {
       {/* Main Content with left margin for fixed sidebar */}
       <div className="flex-1 flex flex-col ml-64">
         {/* Compact Navbar - Fixed */}
-        <div className="bg-zinc-950 p-3 fixed top-0 right-0 left-64 z-10 flex justify-between items-center">
+        <div className="bg-white p-3 fixed top-0 right-0 left-64 z-10 flex justify-between items-center border-b border-gray-200 shadow-sm">
           <div>
-            <h1 className="text-base font-medium text-orange-600">ClearBill</h1>
-            <p className="text-xs text-zinc-400">AI-powered bill auditing and compliance verification</p>
+            <h1 className="text-base font-medium text-blue-600">ClearBill</h1>
+            <p className="text-xs text-gray-600">AI-powered bill auditing and compliance verification</p>
           </div>
           <button 
             onClick={testConnection}
@@ -319,7 +368,7 @@ function App() {
           </button>
           <button 
             onClick={fetchAllDocuments}
-            className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-full text-xs flex items-center space-x-1 transition-colors"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-full text-xs flex items-center space-x-1 transition-colors"
           >
             <span>📋</span>
             <span>All Invoices</span>
@@ -331,10 +380,10 @@ function App() {
           <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-20">
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full">
-                <div className="text-center text-zinc-500">
+                <div className="text-center text-gray-500">
                   <div className="text-5xl mb-4">📄</div>
                   <p className="text-lg">Upload a document to get started</p>
-                  <p className="text-sm text-zinc-400 mt-2">Use the upload area at the bottom</p>
+                  <p className="text-sm text-gray-400 mt-2">Use the upload area at the bottom</p>
                 </div>
               </div>
             )}
@@ -343,8 +392,8 @@ function App() {
               <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-2xl px-4 py-3 rounded-2xl shadow-lg ${
                   message.type === 'user' 
-                    ? 'bg-zinc-950 text-white ml-auto rounded-br-md border border-zinc-800' 
-                    : 'bg-black text-white mr-auto rounded-bl-md border border-zinc-800'
+                    ? 'bg-blue-600 text-white ml-auto rounded-br-md' 
+                    : 'bg-white text-gray-800 mr-auto rounded-bl-md border border-gray-200'
                 }`}>
                   <div className="text-[15px] leading-relaxed">
                     {typeof message.content === 'string' ? message.content : message.content}
@@ -352,7 +401,7 @@ function App() {
                   
                   {message.data && (
                     <div className="mt-3 space-y-2">
-                      <div className="text-xs opacity-75 border-t border-zinc-800 pt-2">
+                      <div className="text-xs opacity-75 border-t border-gray-200 pt-2">
                         <div className="mb-1">
                           <span className="font-medium">File:</span> {message.data.original_filename}
                         </div>
@@ -360,13 +409,13 @@ function App() {
                           <span className="font-medium">Type:</span> {message.data.file_type}
                         </div>
                         {message.data.is_duplicate && (
-                          <div className="text-yellow-300 font-medium">⚠️ Duplicate detected</div>
+                          <div className="text-amber-600 font-medium">⚠️ Duplicate detected</div>
                         )}
                       </div>
                       
-                      <div className="bg-zinc-950 p-3 rounded-lg border border-zinc-800">
-                        <div className="font-medium mb-2 text-xs">AI Analysis:</div>
-                        <div className="text-[15px] text-white leading-relaxed whitespace-pre-wrap">
+                      <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                        <div className="font-medium mb-2 text-xs text-gray-600">AI Analysis:</div>
+                        <div className="text-[15px] text-gray-800 leading-relaxed whitespace-pre-wrap">
                           {(() => {
                             const text = message.data.groq_response;
                             const lines = text.split('\n');
@@ -397,15 +446,15 @@ function App() {
                                 
                                 {items.length > 0 && (
                                   <div className="mb-4">
-                                    <div className="bg-zinc-900 rounded-lg overflow-hidden">
-                                      <div className="grid grid-cols-2 gap-2 p-3 bg-zinc-800 text-xs font-medium text-zinc-300">
+                                    <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
+                                      <div className="grid grid-cols-2 gap-2 p-3 bg-gray-100 text-xs font-medium text-gray-700">
                                         <div>ITEM</div>
                                         <div>AMOUNT</div>
                                       </div>
                                       {items.map((item, idx) => (
-                                        <div key={idx} className="grid grid-cols-2 gap-2 p-3 border-t border-zinc-800 text-sm">
-                                          <div className="text-white">{item.name}</div>
-                                          <div className="text-white font-medium">${item.amount}</div>
+                                        <div key={idx} className="grid grid-cols-2 gap-2 p-3 border-t border-gray-200 text-sm">
+                                          <div className="text-gray-800">{item.name}</div>
+                                          <div className="text-gray-800 font-medium">${item.amount}</div>
                                         </div>
                                       ))}
                                     </div>
@@ -438,7 +487,7 @@ function App() {
             
             {isLoading && (
               <div className="flex justify-start">
-                <div className="max-w-2xl px-4 py-3 rounded-2xl shadow-lg bg-black text-white mr-auto rounded-bl-md border border-zinc-800">
+                <div className="max-w-2xl px-4 py-3 rounded-2xl shadow-lg bg-white text-gray-800 mr-auto rounded-bl-md border border-gray-200">
                   <div className="flex items-center space-x-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
                     <span className="text-[15px]">Processing...</span>
@@ -451,12 +500,12 @@ function App() {
           </div>
 
           {/* Fixed bottom upload zone */}
-          <div className="fixed bottom-0 right-0 left-64 p-3 bg-black">
+          <div className="fixed bottom-0 right-0 left-64 p-3 bg-gray-50 border-t border-gray-200">
             <div 
-              className={`border border-dashed rounded-lg p-3 text-center transition-colors cursor-pointer ${
+              className={`border border-dashed rounded-lg p-5 text-center transition-colors cursor-pointer ${
                 isDragOver 
-                  ? 'border-blue-500 bg-blue-500/10' 
-                  : 'border-zinc-700 hover:border-blue-500 hover:bg-zinc-900/50'
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-gray-300 hover:border-blue-500 hover:bg-gray-100'
               }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -470,7 +519,7 @@ function App() {
                 accept=".pdf,.png,.jpg,.jpeg,.gif,.bmp,.tiff"
                 onChange={handleFileSelect}
               />
-              <div className="text-zinc-400">
+              <div className="text-gray-600">
                 {isDragOver ? (
                   <div className="flex items-center justify-center space-x-2">
                     <div className="text-lg">📁</div>
@@ -481,7 +530,7 @@ function App() {
                     <div className="text-lg">📎</div>
                     <div>
                       <p className="text-sm">Drag & drop or click to upload a file</p>
-                      <p className="text-xs text-zinc-500 mt-1">Only compliant invoices accepted</p>
+                      <p className="text-xs text-gray-500 mt-1">Only compliant invoices accepted</p>
                     </div>
                   </div>
                 )}

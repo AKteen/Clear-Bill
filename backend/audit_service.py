@@ -483,24 +483,71 @@ def perform_audit(groq_response: str, json_data: str, db: Session) -> AuditResul
                 status_color="green"
             )
         
-        # Check for alcohol keywords only for invoices
-        alcohol_keywords = ['whiskey', 'scotch', 'beer', 'wine', 'vodka', 'rum', 'gin', 'alcohol', 'liquor', 'champagne', 'cocktail']
-        found_alcohol = [kw for kw in alcohol_keywords if kw in content]
+        # Comprehensive restricted keywords for invoices
+        alcohol_keywords = [
+            'whiskey', 'whisky', 'scotch', 'bourbon', 'beer', 'wine', 'vodka', 'rum', 'gin', 
+            'alcohol', 'liquor', 'champagne', 'cocktail', 'brandy', 'tequila', 'sake', 'soju',
+            'alcoholic', 'alcoholic beverage', 'alcoholic drink', 'spirit', 'spirits',
+            'bottle of wine', 'bottle of beer', 'wine bottle', 'beer bottle', 'liquor bottle',
+            'alcoholic product', 'drinking', 'beverage alcohol', 'fermented', 'distilled'
+        ]
         
+        entertainment_keywords = [
+            'party', 'entertainment', 'club', 'nightclub', 'casino', 'gambling', 
+            'strip club', 'adult entertainment', 'massage', 'spa', 'leisure', 'recreation'
+        ]
+        
+        luxury_keywords = [
+            'jewelry', 'luxury', 'designer', 'rolex', 'gucci', 'louis vuitton', 
+            'expensive watch', 'diamond', 'gold', 'platinum', 'luxury item', 'high-end'
+        ]
+        
+        violations = []
+        
+        # Check for alcohol keywords
+        found_alcohol = [kw for kw in alcohol_keywords if kw in content]
         if found_alcohol:
+            violations.append({
+                "rule_name": "Alcohol - Restricted Category",
+                "field_name": "content",
+                "violation_type": "restricted_item",
+                "severity": "high",
+                "message": f"Document contains alcohol-related items: {', '.join(found_alcohol)}",
+                "flagged_items": found_alcohol
+            })
+        
+        # Check for entertainment keywords
+        found_entertainment = [kw for kw in entertainment_keywords if kw in content]
+        if found_entertainment:
+            violations.append({
+                "rule_name": "Entertainment - Restricted Category",
+                "field_name": "content",
+                "violation_type": "restricted_item",
+                "severity": "high",
+                "message": f"Document contains entertainment-related items: {', '.join(found_entertainment)}",
+                "flagged_items": found_entertainment
+            })
+        
+        # Check for luxury items
+        found_luxury = [kw for kw in luxury_keywords if kw in content]
+        if found_luxury:
+            violations.append({
+                "rule_name": "Luxury Items - Restricted Category",
+                "field_name": "content",
+                "violation_type": "restricted_item",
+                "severity": "high",
+                "message": f"Document contains luxury items: {', '.join(found_luxury)}",
+                "flagged_items": found_luxury
+            })
+        
+        # Return result based on violations
+        if violations:
             return AuditResult(
                 is_compliant=False,
-                total_violations=1,
-                violations=[{
-                    "rule_name": "Alcohol - Restricted Category",
-                    "field_name": "content",
-                    "violation_type": "restricted_item",
-                    "severity": "high",
-                    "message": f"Document contains alcohol-related items: {', '.join(found_alcohol)}",
-                    "flagged_items": found_alcohol
-                }],
+                total_violations=len(violations),
+                violations=violations,
                 compliance_score=0,
-                summary="Cannot approve - Alcohol items detected",
+                summary=f"Cannot approve - {len(violations)} restricted items detected",
                 approval_status="rejected",
                 status_color="red"
             )
@@ -630,54 +677,107 @@ def perform_audit(groq_response: str, json_data: str, db: Session) -> AuditResul
         )
         
     except json.JSONDecodeError:
-        # Fallback: scan text content for restricted keywords
+        # Fallback: scan text content for restricted keywords with expanded detection
         content = groq_response.lower()
-        alcohol_keywords = ['whiskey', 'scotch', 'beer', 'wine', 'vodka', 'rum', 'gin', 'alcohol', 'liquor', 'champagne', 'cocktail']
+        
+        # Comprehensive alcohol keywords including variations and descriptions
+        alcohol_keywords = [
+            'whiskey', 'whisky', 'scotch', 'bourbon', 'beer', 'wine', 'vodka', 'rum', 'gin', 
+            'alcohol', 'liquor', 'champagne', 'cocktail', 'brandy', 'tequila', 'sake', 'soju',
+            'alcoholic', 'alcoholic beverage', 'alcoholic drink', 'spirit', 'spirits',
+            'bottle of wine', 'bottle of beer', 'wine bottle', 'beer bottle', 'liquor bottle',
+            'alcoholic product', 'drinking', 'beverage alcohol', 'fermented', 'distilled'
+        ]
+        
+        # Entertainment keywords
+        entertainment_keywords = [
+            'party', 'entertainment', 'club', 'nightclub', 'casino', 'gambling', 
+            'strip club', 'adult entertainment', 'massage', 'spa', 'leisure', 'recreation'
+        ]
+        
+        # Luxury items keywords
+        luxury_keywords = [
+            'jewelry', 'luxury', 'designer', 'rolex', 'gucci', 'louis vuitton', 
+            'expensive watch', 'diamond', 'gold', 'platinum', 'luxury item', 'high-end'
+        ]
         
         # Check for vendor name requirement
         vendor_patterns = ['company', 'corp', 'inc', 'ltd', 'llc', 'store', 'shop', 'restaurant', 'cafe', 'hotel', 'market', 'business', 'enterprise', 'services', 'solutions']
         has_vendor = any(pattern in content for pattern in vendor_patterns)
         
+        violations = []
+        
         if not has_vendor:
-            return AuditResult(
-                is_compliant=False,
-                total_violations=1,
-                violations=[{
-                    "rule_name": "Vendor Name Required",
-                    "field_name": "vendor",
-                    "violation_type": "missing_field",
-                    "severity": "high",
-                    "message": "Document must contain a valid vendor/company name",
-                    "flagged_items": ["Missing vendor name"]
-                }],
-                compliance_score=0,
-                summary="Cannot approve - Vendor name is required",
-                approval_status="rejected",
-                status_color="red"
-            )
+            violations.append({
+                "rule_name": "Vendor Name Required",
+                "field_name": "vendor",
+                "violation_type": "missing_field",
+                "severity": "high",
+                "message": "Document must contain a valid vendor/company name",
+                "flagged_items": ["Missing vendor name"]
+            })
         
         # Check for alcohol keywords
         found_alcohol = [kw for kw in alcohol_keywords if kw in content]
-        
         if found_alcohol:
-            return AuditResult(
-                is_compliant=False,
-                total_violations=1,
-                violations=[{
-                    "rule_name": "Alcohol - Restricted Category",
-                    "field_name": "content",
-                    "violation_type": "restricted_item",
-                    "severity": "high",
-                    "message": f"Document contains alcohol-related items: {', '.join(found_alcohol)}",
-                    "flagged_items": found_alcohol
-                }],
-                compliance_score=0,
-                summary="Cannot approve - Alcohol items detected",
-                approval_status="rejected",
-                status_color="red"
-            )
+            violations.append({
+                "rule_name": "Alcohol - Restricted Category",
+                "field_name": "content",
+                "violation_type": "restricted_item",
+                "severity": "high",
+                "message": f"Document contains alcohol-related items: {', '.join(found_alcohol)}",
+                "flagged_items": found_alcohol
+            })
         
-        # If no restricted items found, approve
+        # Check for entertainment keywords
+        found_entertainment = [kw for kw in entertainment_keywords if kw in content]
+        if found_entertainment:
+            violations.append({
+                "rule_name": "Entertainment - Restricted Category",
+                "field_name": "content",
+                "violation_type": "restricted_item",
+                "severity": "high",
+                "message": f"Document contains entertainment-related items: {', '.join(found_entertainment)}",
+                "flagged_items": found_entertainment
+            })
+        
+        # Check for luxury items
+        found_luxury = [kw for kw in luxury_keywords if kw in content]
+        if found_luxury:
+            violations.append({
+                "rule_name": "Luxury Items - Restricted Category",
+                "field_name": "content",
+                "violation_type": "restricted_item",
+                "severity": "high",
+                "message": f"Document contains luxury items: {', '.join(found_luxury)}",
+                "flagged_items": found_luxury
+            })
+        
+        # Determine result based on violations
+        if violations:
+            restricted_violations = [v for v in violations if v['violation_type'] == 'restricted_item']
+            if restricted_violations:
+                return AuditResult(
+                    is_compliant=False,
+                    total_violations=len(violations),
+                    violations=violations,
+                    compliance_score=0,
+                    summary=f"Cannot approve - {len(restricted_violations)} restricted items detected",
+                    approval_status="rejected",
+                    status_color="red"
+                )
+            else:
+                return AuditResult(
+                    is_compliant=False,
+                    total_violations=len(violations),
+                    violations=violations,
+                    compliance_score=0,
+                    summary="Cannot approve - Vendor name is required",
+                    approval_status="rejected",
+                    status_color="red"
+                )
+        
+        # If no violations found, approve
         return AuditResult(
             is_compliant=True,
             total_violations=0,
@@ -731,7 +831,7 @@ def perform_audit_with_mock(mock_data, db):
         status_color="red" if violations else "green"
     )
 def perform_basic_audit(groq_response: str, db: Session) -> AuditResult:
-    
+    """Perform basic audit using policy-based validation"""
     # Get active policies
     policies = db.query(AuditPolicy).filter(AuditPolicy.is_active == True).all()
     
