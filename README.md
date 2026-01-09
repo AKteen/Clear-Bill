@@ -1,8 +1,8 @@
-# Document Processor - AI-Powered Invoice Analysis & Audit System
+# Clear Bill - AI-Powered Invoice Analysis & Audit System
 
-A production-ready document processing application that combines AI analysis with automated audit compliance checking. Upload PDFs and images to get instant AI-powered analysis with comprehensive policy validation and duplicate detection.
+ClearBill is a production-ready document processing application that combines AI analysis with automated audit compliance checking. Upload PDFs and images to get instant AI-powered analysis with comprehensive policy validation and duplicate detection.
 
-<img width="1949" height="1331" alt="Clearbill-img" src="https://github.com/user-attachments/assets/17161ce4-8d09-4966-8bcb-dabc05178801" />
+<img width="1000" height="1000" alt="Clearbill-img" src="https://github.com/user-attachments/assets/17161ce4-8d09-4966-8bcb-dabc05178801" />
 
 
 
@@ -23,7 +23,7 @@ A production-ready document processing application that combines AI analysis wit
 - **Violation Tracking** - Detailed reporting of policy violations with severity levels
 
 ### User Experience
-- **Modern Dark UI** - Sleek interface with orange-red accent colors
+- **Modern UI** - Sleek interface with accent colors
 - **Chat Interface** - Conversational document processing experience
 - **Document History** - Sidebar with clickable document archive
 - **Real-time Processing** - Parallel upload and AI analysis
