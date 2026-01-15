@@ -11,7 +11,7 @@ ClearBill is a production-ready document processing application that combines AI
 - **FastAPI** - High-performance Python web framework
 - **PostgreSQL** - Neon serverless database with connection pooling
 - **SQLAlchemy** - ORM with automatic migrations
-- **Groq API** - AI models (Llama-3.3-70b-versatile, meta-llama/llama-4-scout-17b-16e-instruct)
+- **Groq API** - AI models (Llama-3.3-70b-versatile  (PDFs/ DOCs), meta-llama/llama-4-scout-17b-16e-instruct (IMAGES))
 - **PyMuPDF** - PDF processing and text extraction
 - **Cloudinary** - Cloud file storage and CDN
 
