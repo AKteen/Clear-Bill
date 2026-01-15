@@ -24,6 +24,17 @@ ClearBill is a production-ready document processing application that combines AI
 
 ## 🚀 Features
 
+### AI Model Selection
+
+The system intelligently switches between Groq AI models based on the uploaded file type for optimal processing:
+
+- **Image Files** (PNG, JPG, GIF, BMP, TIFF): Uses `meta-llama/llama-4-scout-17b-16e-instruct`, a vision-capable model that can analyze invoice images directly. This model extracts text, numbers, and structured data from scanned invoices and photos.
+
+- **PDF/Text Documents**: Uses `llama-3.3-70b-versatile`, a powerful text model optimized for document analysis. This model processes text-based PDFs and extracts invoice information from the document content.
+
+Each upload triggers two AI calls per model: one for generating a human-readable response displayed to users, and another for extracting structured JSON data used in backend audit validation. This dual-processing approach ensures both excellent user experience and reliable automated compliance checking.
+
+
 ### Core Functionality
 - **AI Document Analysis** - Powered by Groq's Llama models for text and vision processing
 - **Invoice-Only Processing** - Automatically filters and rejects non-invoice documents
